@@ -12,12 +12,14 @@ import {
   setBackupDir
 } from './services/backup-service'
 import {
+  compileProjectPaper,
   createProject,
   deleteProject,
   deleteProjectFile,
   getProject,
   getProjectDirectory,
   getProjectFileAbsPath,
+  importProblemFiles,
   listProjectFiles,
   listProjects,
   renameProjectFile,
@@ -25,7 +27,7 @@ import {
   type CompetitionType,
   type ProjectMeta
 } from './services/project-service'
-import { clipboard } from 'electron'
+import { clipboard, dialog } from 'electron'
 import {
   deleteProvider,
   getSettings,
@@ -264,6 +266,38 @@ ipcMain.handle(
     if (!res.success || !res.path) return { success: false, message: res.message }
     clipboard.writeText(res.path)
     return { success: true, message: '路径已复制' }
+  }
+)
+
+// 题目上传：弹多选文件框 → 复制到 problem/attachments/（md/txt 同步 statement.md）
+ipcMain.handle(
+  'project:importProblem',
+  async (
+    _evt,
+    id: string
+  ): Promise<{ success: boolean; message: string; imported: string[]; statementUpdated: boolean }> => {
+    const result = await dialog.showOpenDialog({
+      title: '选择题目文件（md/txt 会写入题目原文，其余进 attachments/）',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: '题目与附件', extensions: ['md', 'txt', 'markdown', 'pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'zip', 'xlsx', 'xls', 'csv'] }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, message: '', imported: [], statementUpdated: false }
+    }
+    return importProblemFiles(id, result.filePaths)
+  }
+)
+
+// LaTeX 编译：异步等待编译完成后一次性返回结果
+ipcMain.handle(
+  'project:compileLatex',
+  async (
+    _evt,
+    id: string
+  ): Promise<{ success: boolean; pdfGenerated: boolean; pdfPath: string; logTail: string; message: string }> => {
+    return compileProjectPaper(id)
   }
 )
 

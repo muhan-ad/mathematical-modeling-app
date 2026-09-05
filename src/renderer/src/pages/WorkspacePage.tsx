@@ -9,6 +9,7 @@ import {
   Folder,
   FolderOpen,
   FolderTree,
+  FileUp,
   HardDriveDownload,
   MoreHorizontal,
   Pencil,
@@ -114,6 +115,17 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
   /** 重命名对话框 */
   const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null)
   const [renameSaving, setRenameSaving] = useState(false)
+  /** 上传/编译进行中 */
+  const [importing, setImporting] = useState(false)
+  const [compiling, setCompiling] = useState(false)
+  /** 编译结果对话框 */
+  const [latexResult, setLatexResult] = useState<{
+    success: boolean
+    pdfGenerated: boolean
+    pdfPath: string
+    logTail: string
+    message: string
+  } | null>(null)
 
   const refreshFiles = useCallback(async () => {
     setFilesLoading(true)
@@ -211,6 +223,40 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
     }
   }, [renaming, project.id, refreshFiles])
 
+  /** 上传题目：多选文件 → problem/attachments/（md/txt 同步 statement.md） */
+  const handleImportProblem = useCallback(async () => {
+    if (importing) return
+    setImporting(true)
+    try {
+      const res = await window.app?.project?.importProblem?.(project.id)
+      if (res?.success) {
+        toast.success('题目已导入', { description: res.message })
+        if (res.statementUpdated) toast.info('题目原文 statement.md 已更新，AI 可直接读取')
+        await refreshFiles()
+      } else if (res?.message) {
+        toast.error('导入失败', { description: res.message })
+      }
+    } finally {
+      setImporting(false)
+    }
+  }, [importing, project.id, refreshFiles])
+
+  /** 编译论文：等待完成后展示日志 */
+  const handleCompile = useCallback(async () => {
+    if (compiling) return
+    setCompiling(true)
+    toast.info('正在编译论文（xelatex）…首次编译可能较慢')
+    try {
+      const res = await window.app?.project?.compileLatex?.(project.id)
+      if (res) {
+        setLatexResult(res)
+        await refreshFiles()
+      }
+    } finally {
+      setCompiling(false)
+    }
+  }, [compiling, project.id, refreshFiles])
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* 工作台顶栏 */}
@@ -230,6 +276,26 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
           variant="outline"
           size="sm"
           className="ml-auto shrink-0"
+          onClick={() => void handleImportProblem()}
+          disabled={importing}
+          title="上传题目文件（md/txt 写入题目原文，其余进附件）"
+        >
+          <FileUp className="size-4" /> 上传题目
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => void handleCompile()}
+          disabled={compiling}
+          title="用 xelatex 编译 paper/main.tex"
+        >
+          <FileText className="size-4" /> {compiling ? '编译中…' : '编译论文'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
           onClick={() => setBackupOpen(true)}
         >
           <HardDriveDownload className="size-4" /> 备份本项目
@@ -342,8 +408,7 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
       <ProjectBackupDialog open={backupOpen} onOpenChange={setBackupOpen} project={project} />
 
       {/* 重命名对话框（直接作用于本地磁盘） */}
-      <Dialog open={!!renaming} onOpenChange={(v) => !v && setRenaming(null)}>
-        <DialogContent className="sm:max-w-[420px]">
+      <Dialog open={!!renaming} onOpenChange={(v) => !v && setRenaming(null)}>        <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>重命名</DialogTitle>
             <DialogDescription>
@@ -368,6 +433,38 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
             <Button onClick={() => void handleRenameSubmit()} disabled={renameSaving || !renaming?.name.trim()}>
               确认重命名
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编译结果对话框 */}
+      <Dialog open={!!latexResult} onOpenChange={(v) => !v && setLatexResult(null)}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle className={latexResult?.success ? 'text-success' : 'text-destructive'}>
+              {latexResult?.message}
+            </DialogTitle>
+            <DialogDescription>
+              {latexResult?.pdfGenerated
+                ? `PDF 已生成：${latexResult.pdfPath}`
+                : '未生成 PDF，可查看下方日志定位错误'}
+            </DialogDescription>
+          </DialogHeader>
+          {latexResult?.logTail && (
+            <pre className="text-xs font-mono bg-muted/60 rounded-md p-3 max-h-64 overflow-auto whitespace-pre-wrap break-all">
+              {latexResult.logTail}
+            </pre>
+          )}
+          <DialogFooter>
+            {latexResult?.pdfGenerated && (
+              <Button
+                variant="outline"
+                onClick={() => void window.app?.project?.copyPath?.(project.id, 'paper/main.pdf')}
+              >
+                <Copy className="size-4" /> 复制 PDF 路径
+              </Button>
+            )}
+            <Button onClick={() => setLatexResult(null)}>关闭</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

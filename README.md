@@ -46,12 +46,12 @@
 - Windows 10 19045+ / Windows 11
 - Node.js 20+（推荐 22）
 - pnpm 9+
-- Python 3.10+
-- MiKTeX 或 TeX Live（含 `xelatex` + `latexmk`）
+- Python 3.10+（Agent 运行时需要）
+- MiKTeX 或 TeX Live（含 `xelatex`，用于论文编译；可选，未装时其余功能不受影响）
 
 ## 快速开始
 
-### 安装依赖
+### 安装前端依赖
 
 ```bash
 pnpm install
@@ -59,6 +59,19 @@ pnpm install
 
 > 国内网络环境可设置 Electron 镜像加速：
 > `$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"`
+
+### 配置 Agent Python 环境（首次必做）
+
+应用内置的 AI Agent 是 Python 进程，依赖清单见 `agent/requirements.txt`
+（langgraph / langchain / numpy / scipy / pandas / matplotlib / SciencePlots 等）。
+在项目根目录用 PowerShell 执行一键配置脚本：
+
+```powershell
+.\scripts\setup-agent-env.ps1
+```
+
+脚本会创建 `agent/.venv` 并安装全部依赖（约 500MB，国内网络建议先配置 pip 镜像）。
+之后从应用内「设置」添加模型服务商 API 即可开始使用。
 
 ### 开发模式
 

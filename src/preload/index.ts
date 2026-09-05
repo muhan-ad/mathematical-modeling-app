@@ -50,7 +50,24 @@ const api = {
     /** 删除文件/文件夹（同步本地磁盘；标准结构受保护） */
     deleteFile: (id: string, relPath: string) => ipcRenderer.invoke('project:deleteFile', id, relPath),
     /** 复制文件在磁盘上的绝对路径到剪贴板 */
-    copyPath: (id: string, relPath: string) => ipcRenderer.invoke('project:copyPath', id, relPath)
+    copyPath: (id: string, relPath: string) => ipcRenderer.invoke('project:copyPath', id, relPath),
+    /** 上传题目：弹多选文件框，复制到 problem/attachments/（md/txt 同步 statement.md） */
+    importProblem: (id: string) =>
+      ipcRenderer.invoke('project:importProblem', id) as Promise<{
+        success: boolean
+        message: string
+        imported: string[]
+        statementUpdated: boolean
+      }>,
+    /** 编译论文 paper/main.tex（等待完成后返回结果与日志尾部） */
+    compileLatex: (id: string) =>
+      ipcRenderer.invoke('project:compileLatex', id) as Promise<{
+        success: boolean
+        pdfGenerated: boolean
+        pdfPath: string
+        logTail: string
+        message: string
+      }>
   },
   // Agent Runtime IPC（权限等级 / 推理等级 / 审批都在这条链路上）
   agent: {

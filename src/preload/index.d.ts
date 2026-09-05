@@ -60,6 +60,19 @@ export type AppApi = {
     ) => Promise<{ success: boolean; message: string }>
     deleteFile: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
     copyPath: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
+    importProblem: (id: string) => Promise<{
+      success: boolean
+      message: string
+      imported: string[]
+      statementUpdated: boolean
+    }>
+    compileLatex: (id: string) => Promise<{
+      success: boolean
+      pdfGenerated: boolean
+      pdfPath: string
+      logTail: string
+      message: string
+    }>
   }
   agent: {
     send: (input: {

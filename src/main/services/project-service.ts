@@ -1,6 +1,8 @@
 import { app } from 'electron'
-import { join, dirname } from 'path'
+import { join, dirname, basename } from 'path'
+import { spawn } from 'child_process'
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -404,4 +406,166 @@ export function getProjectFileAbsPath(id: string, relPath: string): { success: b
   } catch (err) {
     return { success: false, message: err instanceof Error ? err.message : String(err) }
   }
+}
+
+// ---------- 题目上传 ----------
+
+const STATEMENT_EXTS = ['.md', '.txt', '.markdown']
+const PROBLEM_EXTS = ['.md', '.txt', '.markdown', '.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.zip', '.xlsx', '.xls', '.csv']
+
+/**
+ * 导入题目文件：所选文件复制到 problem/attachments/（保持原名）；
+ * 其中 .md/.txt 额外写入 problem/statement.md 作为题目原文。
+ */
+export function importProblemFiles(id: string, sourcePaths: string[]): {
+  success: boolean
+  message: string
+  imported: string[]
+  statementUpdated: boolean
+} {
+  const imported: string[] = []
+  let statementUpdated = false
+  try {
+    const root = getProjectDir(id)
+    const attachDir = join(root, 'problem', 'attachments')
+    mkdirSync(attachDir, { recursive: true })
+    for (const src of sourcePaths) {
+      if (!existsSync(src) || !statSync(src).isFile()) continue
+      const name = basename(src)
+      const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
+      if (!PROBLEM_EXTS.includes(ext)) {
+        return { success: false, message: `不支持的文件类型：${name}`, imported, statementUpdated }
+      }
+      const dest = join(attachDir, sanitizeFileNameSafe(name))
+      cpSyncIgnoreMissing(src, dest)
+      imported.push(`problem/attachments/${name}`)
+      if (STATEMENT_EXTS.includes(ext)) {
+        copyFileSync(src, join(root, 'problem', 'statement.md'))
+        statementUpdated = true
+      }
+    }
+    if (imported.length === 0) return { success: false, message: '没有可导入的文件', imported, statementUpdated }
+    touchProject(id)
+    return {
+      success: true,
+      message: statementUpdated
+        ? `已导入 ${imported.length} 个文件，题目原文（statement.md）已更新`
+        : `已导入 ${imported.length} 个附件`,
+      imported,
+      statementUpdated
+    }
+  } catch (err) {
+    return { success: false, message: err instanceof Error ? err.message : String(err), imported, statementUpdated }
+  }
+}
+
+function sanitizeFileNameSafe(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '_')
+}
+
+function cpSyncIgnoreMissing(src: string, dest: string): void {
+  cpSync(src, dest)
+}
+
+function copyFileSync(src: string, dest: string): void {
+  writeFileSync(dest, readFileSync(src))
+}
+
+/** 项目有实质变更时刷新 updatedAt（上传题目等操作调用） */
+function touchProject(id: string): void {
+  try {
+    const metaFile = join(getProjectDir(id), 'meta.json')
+    if (existsSync(metaFile)) {
+      const meta = JSON.parse(readFileSync(metaFile, 'utf-8')) as ProjectMeta
+      meta.updatedAt = nowISO()
+      writeFileSync(metaFile, JSON.stringify({ ...meta, schemaVersion: 1 }, null, 2), 'utf-8')
+    }
+  } catch {
+    /* meta 刷新失败不影响导入 */
+  }
+}
+
+// ---------- LaTeX 编译 ----------
+
+export interface LatexCompileResult {
+  success: boolean
+  pdfGenerated: boolean
+  pdfPath: string
+  logTail: string
+  message: string
+}
+
+/** 编译论文主文件 paper/main.tex（xelatex，仅项目目录内，异步等待完成） */
+export function compileProjectPaper(id: string): Promise<LatexCompileResult> {
+  const fail = (message: string): LatexCompileResult => ({
+    success: false,
+    pdfGenerated: false,
+    pdfPath: '',
+    logTail: '',
+    message
+  })
+  return new Promise((resolve) => {
+    let paperDir: string
+    let entry: string
+    try {
+      paperDir = getProjectDir(id)
+      entry = join(paperDir, 'paper', 'main.tex')
+      paperDir = join(paperDir, 'paper')
+    } catch (err) {
+      resolve(fail(err instanceof Error ? err.message : String(err)))
+      return
+    }
+    if (!existsSync(entry)) {
+      resolve(fail(`找不到论文主文件：paper/main.tex`))
+      return
+    }
+    const proc = spawn(
+      'xelatex',
+      ['-interaction=nonstopmode', '-halt-on-error', 'main.tex'],
+      { cwd: paperDir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    let log = ''
+    let settled = false
+    const finish = (result: LatexCompileResult) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+    const timer = setTimeout(() => {
+      proc.kill()
+      finish(fail('编译超时（上限 300 秒）'))
+    }, 300_000)
+    proc.stdout?.on('data', (d: Buffer) => {
+      log += d.toString('utf-8')
+      if (log.length > 60_000) log = log.slice(-30_000)
+    })
+    proc.stderr?.on('data', (d: Buffer) => {
+      log += d.toString('utf-8')
+    })
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer)
+      finish(
+        fail(
+          err.code === 'ENOENT'
+            ? '未检测到 xelatex，请先安装 TeX 发行版（TeX Live / MiKTeX）'
+            : `编译启动失败：${err.message}`
+        )
+      )
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      const pdf = join(paperDir, 'main.pdf')
+      const pdfGenerated = existsSync(pdf)
+      finish({
+        success: code === 0 && pdfGenerated,
+        pdfGenerated,
+        pdfPath: pdfGenerated ? pdf : '',
+        logTail: log.slice(-4000),
+        message:
+          code === 0 && pdfGenerated
+            ? '编译成功'
+            : `编译失败（exit=${code ?? 'signal'}），详见日志`
+      })
+    })
+  })
 }
