@@ -34,15 +34,6 @@ interface ProjectListPageProps {
   onOpenBackup: () => void
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 6) return '夜深了'
-  if (h < 12) return '早上好'
-  if (h < 14) return '中午好'
-  if (h < 18) return '下午好'
-  return '晚上好'
-}
-
 /** 工作台状态卡片（模型 / 技能 / 备份） */
 function StatusCard({
   icon: Icon,
@@ -162,24 +153,6 @@ export function ProjectListPage({
 
   return (
     <div className="mx-auto max-w-5xl w-full px-6 py-8">
-      {/* 欢迎区 + 快速开始 */}
-      <div className="flex items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{greeting()} 👋</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            准备好解决下一个数模问题了吗？所有项目独立存放题目、代码、支撑材料与论文。
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" disabled title="即将上线：上传题目 PDF 自动创建项目">
-            <FileUp className="size-4" /> 上传题目建项
-          </Button>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="size-4" /> 新建项目
-          </Button>
-        </div>
-      </div>
-
       {/* 三步上手（未配置模型时显示） */}
       {noProviders && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-5 mb-8">
@@ -205,9 +178,17 @@ export function ProjectListPage({
         </div>
       )}
 
-      {/* 最近项目 */}
-      <div className="flex items-center justify-between mb-3">
+      {/* 最近项目 + 快速操作 */}
+      <div className="flex items-center justify-between gap-4 mb-3">
         <h2 className="text-sm font-semibold text-muted-foreground">最近项目</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled title="即将上线：上传题目 PDF 自动创建项目">
+            <FileUp className="size-4" /> 上传题目建项
+          </Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" /> 新建项目
+          </Button>
+        </div>
       </div>
       {loading ? (
         <div className="py-16 text-center text-sm text-muted-foreground">加载中…</div>

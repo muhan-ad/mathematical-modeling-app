@@ -495,6 +495,18 @@ export interface LatexCompileResult {
   message: string
 }
 
+/** TeX 解析：优先内置便携环境 vendor/texlive（setup-portable-tex.ps1 装配），否则系统 PATH */
+function resolveTexEnv(): { cmd: string; env: NodeJS.ProcessEnv } {
+  const vendorBin = join(app.getAppPath(), 'vendor', 'texlive', 'bin', 'windows')
+  if (existsSync(join(vendorBin, 'xelatex.exe'))) {
+    return {
+      cmd: join(vendorBin, 'xelatex.exe'),
+      env: { ...process.env, PATH: `${vendorBin};${process.env.PATH ?? ''}` }
+    }
+  }
+  return { cmd: 'xelatex', env: { ...process.env } }
+}
+
 /** 编译论文主文件 paper/main.tex（xelatex，仅项目目录内，异步等待完成） */
 export function compileProjectPaper(id: string): Promise<LatexCompileResult> {
   const fail = (message: string): LatexCompileResult => ({
@@ -519,10 +531,11 @@ export function compileProjectPaper(id: string): Promise<LatexCompileResult> {
       resolve(fail(`找不到论文主文件：paper/main.tex`))
       return
     }
+    const tex = resolveTexEnv()
     const proc = spawn(
-      'xelatex',
+      tex.cmd,
       ['-interaction=nonstopmode', '-halt-on-error', 'main.tex'],
-      { cwd: paperDir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
+      { cwd: paperDir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: tex.env }
     )
     let log = ''
     let settled = false

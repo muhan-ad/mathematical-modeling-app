@@ -62,10 +62,17 @@ class AgentRunner {
   }
 
   async start(): Promise<void> {
+    // 内置便携 TeX（vendor/texlive）存在时注入 PATH，Agent 的 latex_compile 工具即可使用
+    const vendorTexBin = path.join(this.runtimeDir, 'vendor', 'texlive', 'bin', 'windows')
+    const childEnv: NodeJS.ProcessEnv =
+      existsSync(path.join(vendorTexBin, 'xelatex.exe')) && process.env.PATH !== undefined
+        ? { ...process.env, PATH: `${vendorTexBin};${process.env.PATH}` }
+        : { ...process.env }
     this.proc = spawn(this.pythonPath, ['-X', 'utf8', '-m', 'agent.main'], {
       cwd: this.runtimeDir,
       windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: childEnv
     })
     this.proc.stdout.setEncoding('utf-8')
     this.proc.stdout.on('data', (chunk: string) => this.onStdout(chunk))
