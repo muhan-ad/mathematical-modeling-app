@@ -87,10 +87,13 @@ pnpm run typecheck
 ```
 .
 ├── docs/
-│   └── design.md              # 完整方案设计文档
+│   ├── design.md              # 完整方案设计文档
+│   ├── ui-design.md           # UI 设计规范（色彩/排版/组件/布局）
+│   └── HANDOFF.md             # 项目上下文交接文档（新会话先读）
 ├── src/
 │   ├── main/                  # Electron 主进程
-│   │   └── index.ts
+│   │   ├── index.ts
+│   │   └── services/          # 主进程服务（backup-service 等）
 │   ├── preload/               # 安全桥接层
 │   │   ├── index.ts
 │   │   └── index.d.ts
@@ -98,9 +101,12 @@ pnpm run typecheck
 │       ├── index.html
 │       └── src/
 │           ├── App.tsx
-│           ├── components/ui/  # shadcn 组件
-│           ├── lib/utils.ts    # cn() 工具
-│           └── styles.css      # Tailwind + 主题变量
+│           ├── components/ui/     # shadcn 组件
+│           ├── components/backup/ # 备份业务组件
+│           ├── lib/utils.ts       # cn() 工具
+│           └── styles.css         # Tailwind + 主题变量
+├── tests/                     # e2e 测试（Playwright）
+├── math-modeling/             # 参考资料目录（Mrite 借鉴分析，见其 README.md）
 ├── electron.vite.config.ts    # 三段构建配置（main/preload/renderer）
 ├── electron-builder.yml       # 打包配置
 ├── tailwind.config.ts
