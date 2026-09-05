@@ -1,0 +1,15 @@
+appId: com.example.windowsappmaker
+productName: WindowsAppMaker
+directories:
+  output: release
+files:
+  - out/**/*
+win:
+  target:
+    - nsis
+    - zip
+  artifactName: ${productName}-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
