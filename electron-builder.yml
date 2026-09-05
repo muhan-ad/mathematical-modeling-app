@@ -4,6 +4,16 @@ directories:
   output: release
 files:
   - out/**/*
+# Agent 运行时与内置环境随安装包分发（自包含，目标机器无需装 Python）
+extraResources:
+  # Agent Runtime 源码（仅顶层 .py，排除 .venv 与 __pycache__）
+  - from: agent
+    to: agent
+    filter:
+      - "*.py"
+  # 内置便携 Python（含全部依赖，scripts/setup-python.ps1 装配）
+  - from: vendor/python
+    to: vendor/python
 win:
   target:
     - nsis

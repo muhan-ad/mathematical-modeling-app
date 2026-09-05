@@ -206,13 +206,19 @@ function resolveRuntimePaths(): { runtimeDir: string; pythonPath: string } {
   const runtimeDir = app.isPackaged
     ? path.join(process.resourcesPath!, 'agent')
     : app.getAppPath()
-  const bundledPython = process.env.WAM_PYTHON
+  // Python 解析顺序：WAM_PYTHON 指定 → 内置便携环境 vendor/python → 开发 venv → 系统 python
+  // （vendor/python 由 scripts/setup-python.ps1 装配，路径全部相对应用目录，无本机硬编码）
+  const appRoot = app.isPackaged ? process.resourcesPath! : app.getAppPath()
+  const embeddedPython = path.join(appRoot, 'vendor', 'python', 'python.exe')
   const venvPython = path.join(runtimeDir, 'agent', '.venv', 'Scripts', 'python.exe')
-  const pythonPath = bundledPython && existsSync(bundledPython)
-    ? bundledPython
-    : existsSync(venvPython)
-      ? venvPython
-      : 'python'
+  let pythonPath = 'python'
+  if (process.env.WAM_PYTHON && existsSync(process.env.WAM_PYTHON)) {
+    pythonPath = process.env.WAM_PYTHON
+  } else if (existsSync(embeddedPython)) {
+    pythonPath = embeddedPython
+  } else if (existsSync(venvPython)) {
+    pythonPath = venvPython
+  }
   return { runtimeDir, pythonPath }
 }
 

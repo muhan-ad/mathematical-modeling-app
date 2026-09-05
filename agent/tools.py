@@ -101,13 +101,27 @@ def build_tools(project_dir: str, gate: PermissionGate) -> list:
 
     @tool("file_read", args_schema=ReadFileArgs)
     def file_read(path: str) -> str:
-        """读取项目内的一个文本文件内容（题目、代码、论文、数据均可）。"""
+        """读取项目内的一个文本文件内容（题目、代码、论文、数据均可）。PDF 自动抽取文本。"""
         from .paths import resolve_in_project
 
         def run() -> str:
             p = resolve_in_project(project_dir, path)
             if not p.exists() or not p.is_file():
                 return f"[错误] 文件不存在：{path}"
+            if p.suffix.lower() == ".pdf":
+                try:
+                    from pypdf import PdfReader
+
+                    reader = PdfReader(str(p))
+                    pages = []
+                    for i, page in enumerate(reader.pages):
+                        text = page.extract_text() or ""
+                        pages.append(f"--第 {i + 1}/{len(reader.pages)} 页--\n{text}")
+                    return _truncate("\n".join(pages))
+                except ImportError:
+                    return "[错误] 环境缺少 pypdf，无法读取 PDF 文本"
+                except Exception as e:
+                    return f"[错误] PDF 解析失败：{e}（扫描版 PDF 无文本层，需人工转写）"
             return _truncate(p.read_text("utf-8", errors="replace"))
 
         return gate_tool(gate, "file_read", {"path": path}, run)

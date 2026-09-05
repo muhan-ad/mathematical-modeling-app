@@ -325,7 +325,80 @@ export function listProjectFiles(id: string): ProjectFileEntry[] {
   return out
 }
 
-// ---------- 文件管理操作（重命名 / 删除 / 取绝对路径） ----------
+// ---------- 文件预览（右栏预览面板） ----------
+
+export interface FilePreview {
+  kind: 'image' | 'pdf' | 'md' | 'text' | 'unsupported'
+  /** 图片/PDF 用 dataUrl；文本类用 text */
+  dataUrl?: string
+  text?: string
+  name: string
+  size: number
+  mtime: string
+  message?: string
+}
+
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'])
+const TEXT_EXTS = new Set([
+  '.md', '.markdown', '.tex', '.txt', '.csv', '.json', '.py', '.js', '.ts',
+  '.bib', '.log', '.yml', '.yaml', '.html', '.css', '.xml', '.m', '.r', '.ipynb'
+])
+const PREVIEW_SIZE_CAP = 8 * 1024 * 1024 // 8MB（图片/PDF dataUrl 上限）
+const TEXT_CAP = 200 * 1024 // 文本预览截断上限
+
+/** 读取项目内文件的预览内容（图片/PDF 转 dataUrl，文本类直读） */
+export function readProjectFilePreview(id: string, relPath: string): FilePreview {
+  const base = (extra: Partial<FilePreview>): FilePreview => ({
+    kind: 'unsupported',
+    name: relPath.split('/').pop() ?? relPath,
+    size: 0,
+    mtime: '',
+    ...extra
+  })
+  try {
+    const abs = safeResolve(id, relPath)
+    if (!existsSync(abs) || !statSync(abs).isFile()) {
+      return base({ message: '文件不存在' })
+    }
+    const st = statSync(abs)
+    const ext = relPath.slice(relPath.lastIndexOf('.')).toLowerCase()
+    const head = base({ size: st.size, mtime: st.mtime.toISOString() })
+
+    if (IMAGE_EXTS.has(ext)) {
+      if (st.size > PREVIEW_SIZE_CAP) return { ...head, kind: 'image', message: '图片过大（>8MB），请在资源管理器中打开' }
+      const mime =
+        ext === '.svg' ? 'image/svg+xml' : ext === '.jpg' ? 'image/jpeg' : `image/${ext.slice(1)}`
+      return {
+        ...head,
+        kind: 'image',
+        dataUrl: `data:${mime};base64,${readFileSync(abs).toString('base64')}`
+      }
+    }
+    if (ext === '.pdf') {
+      if (st.size > PREVIEW_SIZE_CAP) return { ...head, kind: 'pdf', message: 'PDF 过大（>8MB），请在资源管理器中打开' }
+      return {
+        ...head,
+        kind: 'pdf',
+        dataUrl: `data:application/pdf;base64,${readFileSync(abs).toString('base64')}`
+      }
+    }
+    if (ext === '.doc' || ext === '.docx' || ext === '.xlsx' || ext === '.xls' || ext === '.zip') {
+      return { ...head, kind: 'unsupported', message: '该类型不支持预览，请在资源管理器中打开' }
+    }
+    if (TEXT_EXTS.has(ext)) {
+      const buf = readFileSync(abs)
+      const text = buf.toString('utf-8', 0, Math.min(buf.length, TEXT_CAP))
+      return {
+        ...head,
+        kind: ext === '.md' || ext === '.markdown' ? 'md' : 'text',
+        text: buf.length > TEXT_CAP ? `${text}\n\n…[文件过大，仅显示前 200KB]` : text
+      }
+    }
+    return { ...head, kind: 'unsupported', message: '暂不支持预览该类型文件' }
+  } catch (err) {
+    return base({ message: err instanceof Error ? err.message : String(err) })
+  }
+}
 
 /** 标准结构：不允许重命名/删除，保证项目规范不被破坏 */
 const PROTECTED_PATHS = new Set([

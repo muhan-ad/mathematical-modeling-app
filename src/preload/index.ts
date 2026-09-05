@@ -51,6 +51,20 @@ const api = {
     deleteFile: (id: string, relPath: string) => ipcRenderer.invoke('project:deleteFile', id, relPath),
     /** 复制文件在磁盘上的绝对路径到剪贴板 */
     copyPath: (id: string, relPath: string) => ipcRenderer.invoke('project:copyPath', id, relPath),
+    /** 读取文件预览内容（图片/PDF dataUrl、md/text 文本） */
+    readPreview: (id: string, relPath: string) =>
+      ipcRenderer.invoke('project:readPreview', id, relPath) as Promise<{
+        kind: 'image' | 'pdf' | 'md' | 'text' | 'unsupported'
+        dataUrl?: string
+        text?: string
+        name: string
+        size: number
+        mtime: string
+        message?: string
+      }>,
+    /** 在资源管理器中显示文件 */
+    reveal: (id: string, relPath: string) =>
+      ipcRenderer.invoke('project:reveal', id, relPath) as Promise<{ success: boolean; message: string }>,
     /** 上传题目：弹多选文件框，复制到 problem/attachments/（md/txt 同步 statement.md） */
     importProblem: (id: string) =>
       ipcRenderer.invoke('project:importProblem', id) as Promise<{

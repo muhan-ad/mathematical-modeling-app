@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
@@ -22,12 +22,12 @@ import {
   importProblemFiles,
   listProjectFiles,
   listProjects,
+  readProjectFilePreview,
   renameProjectFile,
   updateProject,
   type CompetitionType,
   type ProjectMeta
 } from './services/project-service'
-import { clipboard, dialog } from 'electron'
 import {
   deleteProvider,
   getSettings,
@@ -266,6 +266,29 @@ ipcMain.handle(
     if (!res.success || !res.path) return { success: false, message: res.message }
     clipboard.writeText(res.path)
     return { success: true, message: '路径已复制' }
+  }
+)
+
+// 文件预览（右栏预览面板：图片/PDF dataUrl、md/text 直读）
+ipcMain.handle(
+  'project:readPreview',
+  (_evt, id: string, relPath: string) => {
+    return readProjectFilePreview(id, relPath)
+  }
+)
+
+// 在资源管理器中显示文件（预览面板"不支持类型"的兜底动作）
+ipcMain.handle(
+  'project:reveal',
+  (_evt, id: string, relPath: string): { success: boolean; message: string } => {
+    try {
+      const abs = getProjectFileAbsPath(id, relPath)
+      if (!abs.success || !abs.path) return { success: false, message: abs.message }
+      shell.showItemInFolder(abs.path)
+      return { success: true, message: '' }
+    } catch (err) {
+      return { success: false, message: err instanceof Error ? err.message : String(err) }
+    }
   }
 )
 

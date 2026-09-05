@@ -35,6 +35,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { ProjectBackupDialog } from '@/components/backup/ProjectBackupDialog'
 import { AgentChatPanel } from '@/components/agent/AgentChatPanel'
+import { Markdown } from '@/components/agent/Markdown'
 import { COMPETITION_LABELS, STAGE_LABELS, type ProjectMeta } from '@/lib/projects'
 import { cn } from '@/lib/utils'
 
@@ -126,6 +127,18 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
     logTail: string
     message: string
   } | null>(null)
+  /** 文件预览（右栏） */
+  const [preview, setPreview] = useState<{
+    kind: 'image' | 'pdf' | 'md' | 'text' | 'unsupported'
+    dataUrl?: string
+    text?: string
+    name: string
+    size: number
+    mtime: string
+    message?: string
+  } | null>(null)
+  const [previewPath, setPreviewPath] = useState<string>('')
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const refreshFiles = useCallback(async () => {
     setFilesLoading(true)
@@ -191,6 +204,24 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
       }
     },
     [project.id, refreshFiles]
+  )
+
+  /** 选中文件 → 右栏预览 */
+  const handleSelectFile = useCallback(
+    async (path: string) => {
+      setPreviewPath(path)
+      setPreviewLoading(true)
+      setPreview(null)
+      try {
+        const res = await window.app?.project?.readPreview?.(project.id, path)
+        setPreview(res ?? null)
+      } catch (err) {
+        toast.error('预览加载失败', { description: err instanceof Error ? err.message : String(err) })
+      } finally {
+        setPreviewLoading(false)
+      }
+    },
+    [project.id]
   )
 
   const handleRenameSubmit = useCallback(async () => {
@@ -352,8 +383,10 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
                   entry={f}
                   collapsed={collapsed.has(f.path)}
                   menuOpen={menuPath === f.path}
+                  selected={previewPath === f.path}
                   projectId={project.id}
                   onToggleDir={toggleDir}
+                  onSelectFile={handleSelectFile}
                   onMenuToggle={(path) => setMenuPath((prev) => (prev === path ? null : path))}
                   onCopyPath={handleCopyPath}
                   onDelete={handleDelete}
@@ -392,14 +425,62 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
           />
         )}
 
-        {/* 右：预览面板（Phase 2 接 PDF/图片/Markdown 预览） */}
+        {/* 右：预览面板（图片/PDF/Markdown/文本） */}
         {rightOpen && (
-          <aside style={{ width: rightWidth }} className="shrink-0 flex flex-col items-center justify-center gap-2 text-muted-foreground p-4 text-center border-l overflow-hidden">
-            <FileText className="size-6" />
-            <p className="text-xs">预览面板（开发中）</p>
-            <p className="text-[11px] text-muted-foreground/70 flex items-center gap-1">
-              <Sparkles className="size-3" /> 将支持论文 PDF / 图表 / 结果文件预览
-            </p>
+          <aside className="flex flex-col min-h-0 border-l overflow-hidden">
+            <div className="h-9 shrink-0 border-b flex items-center justify-between px-3 gap-2">
+              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 min-w-0">
+                <FileText className="size-3.5 shrink-0" />
+                <span className="truncate">{previewPath ? previewPath : '预览面板'}</span>
+              </span>
+              {previewPath && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 shrink-0"
+                  onClick={() => void handleCopyPath(previewPath)}
+                  aria-label="复制路径"
+                  title="复制路径"
+                >
+                  <Copy className="size-3" />
+                </Button>
+              )}
+            </div>
+            <div className="flex-1 overflow-auto p-3 min-h-0">
+              {previewLoading && <p className="text-xs text-muted-foreground text-center mt-8">加载中…</p>}
+              {!previewLoading && !preview && !previewPath && (
+                <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground p-4 text-center">
+                  <FileText className="size-6" />
+                  <p className="text-xs">点击左侧文件预览</p>
+                  <p className="text-[11px] text-muted-foreground/70 flex items-center gap-1">
+                    <Sparkles className="size-3" /> 支持图片 / PDF / Markdown / 文本
+                  </p>
+                </div>
+              )}
+              {!previewLoading && preview?.kind === 'image' && preview.dataUrl && (
+                <img src={preview.dataUrl} alt={preview.name} className="max-w-full rounded border" />
+              )}
+              {!previewLoading && preview?.kind === 'pdf' && preview.dataUrl && (
+                <iframe src={preview.dataUrl} title={preview.name} className="w-full h-full min-h-[400px] rounded border" />
+              )}
+              {!previewLoading && preview?.kind === 'md' && preview.text !== undefined && (
+                <Markdown content={preview.text} />
+              )}
+              {!previewLoading && preview?.kind === 'text' && preview.text !== undefined && (
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-5">{preview.text}</pre>
+              )}
+              {!previewLoading && preview && (preview.kind === 'unsupported' || preview.message) && (
+                <div className="h-full flex flex-col items-center justify-center gap-3 text-center p-4">
+                  <FileText className="size-6 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    {preview.message ?? '暂不支持预览该类型'}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => void handleCopyPath(previewPath)}>
+                    <Copy className="size-3.5" /> 复制文件路径
+                  </Button>
+                </div>
+              )}
+            </div>
           </aside>
         )}
       </div>
@@ -491,8 +572,10 @@ interface FileRowProps {
   entry: FileEntry
   collapsed: boolean
   menuOpen: boolean
+  selected: boolean
   projectId: string
   onToggleDir: (path: string) => void
+  onSelectFile: (path: string) => void
   onMenuToggle: (path: string) => void
   onCopyPath: (path: string) => void
   onDelete: (entry: FileEntry) => void
@@ -503,8 +586,9 @@ function FileRow({
   entry,
   collapsed,
   menuOpen,
-  projectId: _projectId,
+  selected,
   onToggleDir,
+  onSelectFile,
   onMenuToggle,
   onCopyPath,
   onDelete,
@@ -515,13 +599,16 @@ function FileRow({
   const label = isDir ? DIR_LABELS[entry.path] : undefined
   return (
     <div
-      className="group flex items-center gap-1 py-0.5 rounded hover:bg-muted/50 px-1 min-w-0"
+      className={cn(
+        'group flex items-center gap-1 py-0.5 rounded px-1 min-w-0',
+        selected ? 'bg-primary/15' : 'hover:bg-muted/50'
+      )}
       style={{ paddingLeft: `${8 + depth * 12}px` }}
     >
-      {/* 目录：点击整行折叠/展开 */}
+      {/* 目录：点击整行折叠/展开；文件：点击预览 */}
       <div
         className={cn('flex items-center gap-1.5 min-w-0 flex-1', isDir && 'cursor-pointer')}
-        onClick={isDir ? () => onToggleDir(entry.path) : undefined}
+        onClick={isDir ? () => onToggleDir(entry.path) : () => onSelectFile(entry.path)}
       >
         {isDir ? (
           <>
@@ -539,7 +626,7 @@ function FileRow({
         ) : (
           <FileIcon className="size-3.5 shrink-0 text-muted-foreground ml-[14px]" />
         )}
-        <span className={cn('truncate', isDir && 'font-medium')} title={entry.path}>
+        <span className={cn('truncate cursor-pointer', isDir && 'font-medium')} title={entry.path}>
           {entry.path.split('/').pop()}
         </span>
         {label && (

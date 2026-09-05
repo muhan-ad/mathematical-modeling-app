@@ -60,6 +60,16 @@ export type AppApi = {
     ) => Promise<{ success: boolean; message: string }>
     deleteFile: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
     copyPath: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
+    readPreview: (id: string, relPath: string) => Promise<{
+      kind: 'image' | 'pdf' | 'md' | 'text' | 'unsupported'
+      dataUrl?: string
+      text?: string
+      name: string
+      size: number
+      mtime: string
+      message?: string
+    }>
+    reveal: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
     importProblem: (id: string) => Promise<{
       success: boolean
       message: string
