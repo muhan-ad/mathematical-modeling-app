@@ -14,7 +14,7 @@
  */
 
 import { app, shell } from 'electron'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 export interface SkillMeta {
@@ -42,6 +42,38 @@ function getSkillsRoot(): string {
 
 function getPluginsRoot(): string {
   return join(app.getPath('userData'), 'plugins')
+}
+
+/** 随包内置技能的根目录（打包后位于 resources/skills，开发态位于仓库 resources/skills） */
+function getBundledSkillsRoot(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath ?? '', 'skills')
+    : join(app.getAppPath(), 'resources', 'skills')
+}
+
+/** 首次运行把随包内置技能播种到用户技能库（用 marker 只执行一次，尊重用户之后的删除） */
+function ensureBundledSkills(): void {
+  try {
+    const userRoot = getSkillsRoot()
+    const marker = join(userRoot, '.bundled-seed-v1')
+    if (existsSync(marker)) return
+    const bundledRoot = getBundledSkillsRoot()
+    if (!existsSync(bundledRoot)) return
+    mkdirSync(userRoot, { recursive: true })
+    for (const d of readdirSync(bundledRoot, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue
+      const src = join(bundledRoot, d.name, 'SKILL.md')
+      if (!existsSync(src)) continue
+      const destDir = join(userRoot, d.name)
+      if (!existsSync(destDir)) {
+        mkdirSync(destDir, { recursive: true })
+        copyFileSync(src, join(destDir, 'SKILL.md'))
+      }
+    }
+    writeFileSync(marker, new Date().toISOString(), 'utf-8')
+  } catch {
+    /* 播种失败不阻塞应用启动 */
+  }
 }
 
 /** 目录名只允许 ASCII：字母/数字/下划线/连字符 */
@@ -96,6 +128,7 @@ function loadSkillFrom(skillFile: string, id: string, source: SkillMeta['source'
 
 /** 列出全部技能：用户技能 + 各插件携带的技能（同名时用户技能优先） */
 export function listSkills(): SkillMeta[] {
+  ensureBundledSkills()
   const out = new Map<string, SkillMeta>()
   const userRoot = getSkillsRoot()
   if (existsSync(userRoot)) {

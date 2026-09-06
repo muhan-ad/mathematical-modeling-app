@@ -14,6 +14,9 @@ extraResources:
   # 内置便携 Python（含全部依赖，scripts/setup-python.ps1 装配）
   - from: vendor/python
     to: vendor/python
+  # 随包内置技能（首次运行由 skill-service 播种到用户技能库）
+  - from: resources/skills
+    to: skills
 win:
   target:
     - nsis

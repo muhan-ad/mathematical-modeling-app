@@ -91,6 +91,34 @@ pnpm run dev
 | `pnpm run typecheck` | TypeScript 类型检查 |
 | `pnpm run build:win` | 打包 Windows 安装包（产物在 `release/`） |
 
+### 论文编译环境（LaTeX，可选但推荐）
+
+> **声明**：为控制安装包体积，本应用**不内置 TeX 发行版**。「写论文 → 编译 PDF」依赖你本机安装的 TeX（应用通过系统 `PATH` 查找 `xelatex`）。
+> 不装也能正常使用其余全部功能（读题 / 建模 / 求解 / 技能 / 预览）；只有"把论文编译成 PDF"这一步需要它。
+
+**推荐：MiKTeX**（Windows 最简单，缺包时能自动联网补装）：
+
+| 项 | 内容 |
+|----|------|
+| 官方网址 | https://miktex.org |
+| 下载页面 | https://miktex.org/download |
+| 版本 | 下载页面提供的**最新稳定版**（建议选 "Windows 安装包 Basic/Full"） |
+| 安装位置 | 选 **“仅为我安装（per-user）”**，默认装到 `C:\Users\<你的用户名>\AppData\Local\Programs\MiKTeX`，无需管理员权限；勾选安装完成后自动把 `xelatex` 加入 `PATH` |
+
+**备选：TeX Live**（全量，体积大但更全）：
+
+| 项 | 内容 |
+|----|------|
+| 官方网址 | https://tug.org/texlive/ |
+| Windows 安装 | https://tug.org/texlive/windows.html（install-tl-windows） |
+| 版本 | 每年一版（如 TeX Live 2025），装最新版即可 |
+| 安装位置 | 默认 `C:\texlive\<年份>\`，安装时勾选加入系统 `PATH` |
+
+**安装后**：重启应用（或重开对话），Agent 的 `latex_compile` 工具会自动检测到 `xelatex` 即可编译出 PDF。可用 `xelatex --version` 在终端自检是否就绪。
+
+> 国内网络下载 TeX 发行版可能较慢，可用镜像：
+> MiKTeX 官方提供地区镜像；TeX Live 可参考清华镜像 `https://mirrors.tuna.tsinghua.edu.cn/CTAN/`。
+
 ## 你的数据存在哪（重要）
 
 应用运行数据、竞赛项目、技能、插件**全部存放在系统 userData 目录**，由 Electron `app.getPath('userData')` 解析
@@ -114,8 +142,11 @@ pnpm run dev
 | `paper-writing` | 论文写作与排版 | 把结果整理为规范 LaTeX 论文 |
 | `proof-compile` | 校对与编译成稿 | 交稿前一致性校对并编译出 PDF |
 
-技能存于**每个用户的 `userData/skills/`**（不随代码写入用户项目）。**手动导入方式**：把 `resources/skills/` 下某个技能文件夹（含 `SKILL.md`）整体复制到你的技能库目录
-（Windows 通常为 `%APPDATA%\mathematical-modeling-app\skills\`）即可启用，也可在应用内「技能」管理界面自建/编辑。
+技能存于**每个用户的 `userData/skills/`**（不随代码写入用户项目）。
+
+- **打包版（Release 安装包）**：首次运行时应用**自动把这些内置技能播种**到你的技能库，开箱即用、无需手动操作；之后你仍可自由编辑或删除。
+- **源码版（clone 开发）**：请把 `resources/skills/` 下某个技能文件夹（含 `SKILL.md`）整体复制到你的技能库目录
+  （Windows 通常为 `%APPDATA%\mathematical-modeling-app\skills\`）即可启用，也可在应用内「技能」管理界面自建/编辑。
 
 - **新建技能**：应用内「技能」管理界面，创建一个含 `name`/`description` 元信息的 `SKILL.md` 即生效。
 - **导入插件**：「插件」管理界面导入一个符合规范的插件文件夹（`plugin.json` + `skills/`），自动并入技能库。
