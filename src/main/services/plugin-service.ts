@@ -134,6 +134,20 @@ export async function importPlugin(): Promise<{
   if (existsSync(dest)) {
     return { success: false, message: `插件「${id}」已存在，请先卸载后再导入` }
   }
+  // 导入前信任确认：第三方插件的技能正文会注入 AI 上下文，并可能在本机执行代码。
+  const confirm = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['取消', '导入'],
+    defaultId: 1,
+    cancelId: 0,
+    title: '确认导入插件',
+    message: `确认导入第三方插件「${id}」？`,
+    detail:
+      '插件携带的技能内容会注入 AI 的提示词，并可能在你的本机上执行代码。仅应从可信来源导入；导入后可在插件管理中卸载。'
+  })
+  if (confirm.response !== 1) {
+    return { success: false, message: '' }
+  }
   try {
     mkdirSync(root, { recursive: true })
     cpSync(src, dest, { recursive: true })

@@ -228,7 +228,7 @@ def build_tools(project_dir: str, gate: PermissionGate) -> list:
                 return f"[错误] 找不到 {entry}"
             try:
                 proc = subprocess.run(
-                    ["xelatex", "-interaction=nonstopmode", "-halt-on-error", tex.name],
+                    ["xelatex", "-interaction=nonstopmode", "-halt-on-error", "-no-shell-escape", tex.name],
                     cwd=str(paper_dir),
                     input="",
                     capture_output=True,

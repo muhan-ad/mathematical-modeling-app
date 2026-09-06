@@ -66,10 +66,26 @@ function nowISO(): string {
 
 /** 校验项目名并清理非法文件名字符 */
 function sanitizeName(name: string): string {
-  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()
+  // 除非法文件名字符外，顺带去掉换行/制表/其他控制字符，
+  // 避免带换行的名字被直接拼进 LaTeX 注释/标题与 markdown 造成错乱。
+  const cleaned = name
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
   if (!cleaned) throw new Error('项目名称不能为空')
   if (cleaned.length > 100) throw new Error('项目名称过长（最多 100 字符）')
   return cleaned
+}
+
+/**
+ * 把字符串转义成可安全嵌入 LaTeX 文本/参数（如 \title{…}）的内容。
+ * TeX 特殊字符 % # & _ $ ^ ~ \ { } 需转义；控制字符/换行退化为空格。
+ */
+function escapeLatex(text: string): string {
+  return text
+    .replace(/([\\{}&$#%_^~])/g, '\\$1')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
 }
 
 function validateCompetition(c: unknown): CompetitionType {
@@ -93,7 +109,7 @@ function paperMainTex(projectName: string): string {
 \\usepackage{hyperref}
 \\geometry{a4paper,margin=2.5cm}
 
-\\title{${projectName}}
+\\title{${escapeLatex(projectName)}}
 \\author{}
 \\date{}
 
@@ -607,7 +623,7 @@ export function compileProjectPaper(id: string): Promise<LatexCompileResult> {
     const tex = resolveTexEnv()
     const proc = spawn(
       tex.cmd,
-      ['-interaction=nonstopmode', '-halt-on-error', 'main.tex'],
+      ['-interaction=nonstopmode', '-halt-on-error', '-no-shell-escape', 'main.tex'],
       { cwd: paperDir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: tex.env }
     )
     let log = ''

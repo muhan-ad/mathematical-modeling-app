@@ -82,6 +82,11 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// 固定应用名 → 统一 userData 目录（%APPDATA%/<name>）：
+// 避免开发态(package.json name)与安装包(productName)各自落不同目录，导致换装后"项目凭空消失"。
+// 必须在 app ready / 任何 service 读取 userData 之前调用。
+app.setName('mathematical-modeling-app')
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -105,7 +110,16 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // 只放行 http/https，交由系统默认浏览器打开；其余协议（file:、vscode:、mailto: 等）一律拒绝，
+    // 避免被污染的模型回复给出的链接唤起本机任意程序/自定义协议处理。
+    try {
+      const protocol = new URL(details.url).protocol
+      if (protocol === 'http:' || protocol === 'https:') {
+        shell.openExternal(details.url)
+      }
+    } catch {
+      /* 非法 URL 直接忽略 */
+    }
     return { action: 'deny' }
   })
 
@@ -506,13 +520,28 @@ ipcMain.handle(
   }
 )
 
-app.whenReady().then(() => {
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+// 单实例锁：避免双开同一应用对同一项目目录并发写文件 / 起两个 Agent 会话。
+// 必须先于 whenReady 判断：拿不到锁说明已有实例在跑，直接退出、不再建窗。
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
   })
-})
+
+  app.whenReady().then(() => {
+    createWindow()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  })
+}
 
 app.on('window-all-closed', () => {
   void stopAllAgentSessions()
