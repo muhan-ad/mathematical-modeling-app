@@ -1,4 +1,4 @@
-# Windows App Maker - Embedded Python environment setup
+# Mathematical Modeling App - Embedded Python environment setup
 # Usage (from repo root, PowerShell):  .\scripts\setup-python.ps1
 # Effect: downloads python-build-standalone CPython into vendor\python\
 #         and installs agent/requirements.txt into it.
@@ -20,7 +20,7 @@ if (Test-Path $targetPython) {
     # 1. Discover latest CPython 3.13 Windows build from python-build-standalone
     Write-Host "[1/4] Querying latest python-build-standalone release..."
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest" `
-        -Headers @{ "User-Agent" = "windows-app-maker-setup" }
+        -Headers @{ "User-Agent" = "mathematical-modeling-app-setup" }
     $asset = $release.assets | Where-Object { $_.name -like "cpython-3.13*-x86_64-pc-windows-msvc-install_only.tar.gz" } |
         Select-Object -First 1
     if (-not $asset) { Write-Error "No matching CPython 3.13 Windows asset found"; exit 1 }

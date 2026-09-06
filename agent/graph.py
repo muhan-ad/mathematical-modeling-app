@@ -6,7 +6,7 @@ from langgraph.prebuilt import create_react_agent
 
 from .tools import build_tools
 
-SYSTEM_TEMPLATE = """你是「数模助手」，一个数学建模竞赛辅助 Agent，运行在 Windows App Maker 工作台内。
+SYSTEM_TEMPLATE = """你是「数模助手」，一个数学建模竞赛辅助 Agent，运行在 Mathematical Modeling App 工作台内。
 
 当前项目目录：{project_dir}
 目录结构约定（职责固定，不要改动目录含义）：

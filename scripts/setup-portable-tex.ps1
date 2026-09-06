@@ -1,4 +1,4 @@
-# Windows App Maker - Portable LaTeX environment setup (TinyTeX distribution)
+# Mathematical Modeling App - Portable LaTeX environment setup (TinyTeX distribution)
 # Usage (from repo root, PowerShell):  .\scripts\setup-portable-tex.ps1 [-Mirror tuna]
 # Effect: downloads TinyTeX-1 into vendor\texlive\ (preferred by the app) and
 #         installs Chinese typesetting (ctex) plus common packages.

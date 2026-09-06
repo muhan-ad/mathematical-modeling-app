@@ -25,7 +25,7 @@ export default function App() {
       {/* 顶部全局栏：备份按钮任何页面可达（要求 #1） */}
       <header className="h-14 border-b flex items-center justify-between px-4 shrink-0 bg-card/50 backdrop-blur">
         <div className="flex items-center gap-3">
-          <span className="text-base font-semibold">Windows App Maker</span>
+          <span className="text-base font-semibold">Mathematical Modeling App</span>
           {view === 'workspace' && activeProject && (
             <Button
               variant="ghost"

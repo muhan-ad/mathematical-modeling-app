@@ -1,4 +1,4 @@
-# Windows App Maker - Agent environment setup
+# Mathematical Modeling App - Agent environment setup
 # Usage (from repo root, PowerShell):  .\scripts\setup-agent-env.ps1
 # Effect: creates agent\.venv and installs all Agent Runtime Python deps
 # Requires: Python 3.10+ on PATH

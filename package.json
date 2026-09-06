@@ -1,7 +1,7 @@
 {
-  "name": "windows-app-maker",
+  "name": "mathematical-modeling-app",
   "version": "1.0.0",
-  "description": "Windows desktop app built with Electron + Vite + React + TypeScript",
+  "description": "AI collaborative desktop app for mathematical modeling contests, built with Electron + Vite + React + TypeScript",
   "main": "./out/main/index.js",
   "author": "agent",
   "private": true,

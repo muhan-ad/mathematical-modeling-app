@@ -1,4 +1,4 @@
-# Windows App Maker
+# Mathematical Modeling App
 
 > 面向大学生数学建模竞赛的 **AI 协作桌面应用**——从读题、建模、求解到 LaTeX 论文生成与 PDF 编译，全程让 LLM Agent 当你的「协作队友」，你专注决策与审查。
 
