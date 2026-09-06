@@ -7,15 +7,18 @@
 """
 from playwright.sync_api import sync_playwright
 import sys
+import os
+
+# 截图目录解析为项目相对路径（tests/screenshots/，已被 .gitignore 排除），
+# 不依赖任何本机绝对路径，克隆到任意位置均可运行。
+_SHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
+os.makedirs(_SHOT_DIR, exist_ok=True)
 
 URL = "http://localhost:5173"
 SHOTS = [
-    ("e:/agent-project/windows-app-maker/tests/screenshots/01-initial.png", "initial"),
-    ("e:/agent-project/windows-app-maker/tests/screenshots/02-manager-opened.png", "manager-opened"),
+    (os.path.join(_SHOT_DIR, "01-initial.png"), "initial"),
+    (os.path.join(_SHOT_DIR, "02-manager-opened.png"), "manager-opened"),
 ]
-
-import os
-os.makedirs("e:/agent-project/windows-app-maker/tests/screenshots", exist_ok=True)
 
 errors = []
 with sync_playwright() as p:
