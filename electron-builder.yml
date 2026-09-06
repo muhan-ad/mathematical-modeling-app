@@ -19,6 +19,7 @@ win:
     - nsis
     - zip
   artifactName: ${productName}-${version}.${ext}
+  icon: build/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

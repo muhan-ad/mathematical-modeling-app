@@ -33,6 +33,16 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   const [searchKey, setSearchKey] = useState('')
   const [savingSearch, setSavingSearch] = useState(false)
   const [theme, setTheme] = useState<ThemeName>(() => getTheme())
+  /** 优化 AI 专属技能（独立于主技能库） */
+  const [optSkills, setOptSkills] = useState<
+    { id: string; name: string; description: string; enabled: boolean; updatedAt: string }[] | null
+  >(null)
+  const [optSkillEditor, setOptSkillEditor] = useState<{
+    id?: string
+    name: string
+    description: string
+    content: string
+  } | null>(null)
 
   const handleThemeChange = (next: ThemeName) => {
     setTheme(next)
@@ -53,6 +63,16 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setOptSkills(await window.app?.optskill?.list())
+      } catch {
+        setOptSkills([])
+      }
+    })()
+  }, [])
 
   const handleDelete = async (p: ProviderView) => {
     if (!window.confirm(`确定删除服务商「${PROVIDER_TYPE_LABELS[p.type]} · ${p.model}」吗？`)) return
@@ -343,6 +363,133 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* 优化 AI 专属技能（独立于主技能库） */}
+        <div className="mt-5 pt-4 border-t">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="text-sm font-medium">优化 AI 专属技能</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                只作用于优化 AI 的指导规则（如项目目录规范、主力 Agent 的技能生态），与主技能库互不相通。启用的技能会注入优化提示词。
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setOptSkillEditor({ name: '', description: '', content: '' })}>
+              <Plus className="size-3.5" /> 新建
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {(optSkills ?? []).map((s) => (
+              <div key={s.id} className="rounded-md border p-2.5 flex items-center gap-2.5 text-xs">
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-[hsl(var(--primary))] cursor-pointer"
+                  checked={s.enabled}
+                  onChange={async (e) => {
+                    try {
+                      const res = await window.app!.optskill.setEnabled(s.id, e.target.checked)
+                      if (res.success) {
+                        setOptSkills(await window.app!.optskill.list())
+                      } else toast.error(res.message)
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : '操作失败')
+                    }
+                  }}
+                  aria-label={`启用 ${s.name}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-sm">{s.name}</div>
+                  {s.description && <div className="text-muted-foreground mt-0.5 truncate">{s.description}</div>}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7"
+                  onClick={async () => {
+                    const d = await window.app?.optskill?.get(s.id)
+                    if (d) setOptSkillEditor({ id: d.id, name: d.name, description: d.description, content: d.content })
+                  }}
+                >
+                  <Pencil className="size-3" /> 编辑
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-destructive hover:text-destructive"
+                  onClick={async () => {
+                    if (!window.confirm(`删除专属技能「${s.name}」？`)) return
+                    const res = await window.app!.optskill.remove(s.id)
+                    if (res.success) {
+                      toast.success(res.message)
+                      setOptSkills(await window.app!.optskill.list())
+                    } else toast.error(res.message)
+                  }}
+                >
+                  <Trash2 className="size-3" /> 删除
+                </Button>
+              </div>
+            ))}
+            {optSkills && optSkills.length === 0 && (
+              <p className="text-xs text-muted-foreground py-2">还没有专属技能。可新建，例如「路径描述规范」——让优化产出的提示词严格使用英文相对路径。</p>
+            )}
+          </div>
+
+          {/* 专属技能编辑器 */}
+          {optSkillEditor && (
+            <div className="mt-3 rounded-md border p-3 space-y-2 bg-muted/20">
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="技能名称"
+                  value={optSkillEditor.name}
+                  onChange={(e) => setOptSkillEditor({ ...optSkillEditor, name: e.target.value })}
+                  maxLength={40}
+                />
+                <Input
+                  placeholder="一句话描述"
+                  value={optSkillEditor.description}
+                  onChange={(e) => setOptSkillEditor({ ...optSkillEditor, description: e.target.value })}
+                  maxLength={80}
+                />
+              </div>
+              <textarea
+                placeholder="技能正文：给优化 AI 的指导规则（Markdown）"
+                value={optSkillEditor.content}
+                onChange={(e) => setOptSkillEditor({ ...optSkillEditor, content: e.target.value })}
+                className="w-full min-h-[160px] rounded-md border bg-background px-3 py-2 text-xs font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setOptSkillEditor(null)}>
+                  取消
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (!optSkillEditor.name.trim()) {
+                      toast.error('请填写名称')
+                      return
+                    }
+                    try {
+                      const res = await window.app!.optskill.save({
+                        id: optSkillEditor.id,
+                        name: optSkillEditor.name.trim(),
+                        description: optSkillEditor.description.trim(),
+                        content: optSkillEditor.content
+                      })
+                      if (res.success) {
+                        toast.success(res.message)
+                        setOptSkillEditor(null)
+                        setOptSkills(await window.app!.optskill.list())
+                      } else toast.error(res.message)
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : '保存失败')
+                    }
+                  }}
+                >
+                  保存
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

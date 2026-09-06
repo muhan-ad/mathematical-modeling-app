@@ -22,6 +22,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Resizable } from 're-resizable'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -63,11 +64,22 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
   const [filesLoading, setFilesLoading] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
-  /** 可拖拽栏宽（记忆在本地） */
+  /** 可拖拽栏宽（记忆在本地；re-resizable 处理拖拽边界与指针捕获） */
   const [leftWidth, setLeftWidth] = useState(() => Number(localStorage.getItem('wam-left-width')) || 260)
-  const [rightWidth, setRightWidth] = useState(() => Number(localStorage.getItem('wam-right-width')) || 300)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const dragSide = useRef<'left' | 'right' | null>(null)
+  /** 可拖拽栏宽（记忆在本地；首次使用时预览面板取窗口宽的 65%） */
+  const [rightWidth, setRightWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('wam-right-width'))
+    if (saved > 0) return saved
+    const winW = typeof window !== 'undefined' ? window.innerWidth : 1280
+    return Math.round(winW * 0.65)
+  })
+
+  useEffect(() => {
+    // 版本升级：清除旧默认值，让 65% 初始宽度生效一次
+    if (localStorage.getItem('wam-right-width') === '300') {
+      localStorage.removeItem('wam-right-width')
+    }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('wam-left-width', String(leftWidth))
@@ -75,40 +87,6 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
   useEffect(() => {
     localStorage.setItem('wam-right-width', String(rightWidth))
   }, [rightWidth])
-
-  // 拖拽分隔条：mousemove 实时更新对应栏宽，抬起结束
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      const side = dragSide.current
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!side || !rect) return
-      if (side === 'left') {
-        setLeftWidth(Math.min(Math.max(e.clientX - rect.left, 160), Math.min(480, rect.width - 320)))
-      } else {
-        setRightWidth(Math.min(Math.max(rect.right - e.clientX, 200), Math.min(560, rect.width - 380)))
-      }
-    }
-    const onUp = () => {
-      if (dragSide.current) {
-        dragSide.current = null
-        document.body.style.userSelect = ''
-        document.body.style.cursor = ''
-      }
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [])
-
-  const startDrag = (side: 'left' | 'right') => (e: React.MouseEvent) => {
-    e.preventDefault()
-    dragSide.current = side
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-  }
   /** 收起的目录集合 */
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   /** 行内操作菜单展开的行 */
@@ -139,6 +117,10 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
   } | null>(null)
   const [previewPath, setPreviewPath] = useState<string>('')
   const [previewLoading, setPreviewLoading] = useState(false)
+  /** 全屏预览模式 */
+  const [fullscreen, setFullscreen] = useState(false)
+  /** 右栏拖宽进行中 */
+  const [rightResizing, setRightResizing] = useState(false)
 
   const refreshFiles = useCallback(async () => {
     setFilesLoading(true)
@@ -273,20 +255,34 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
   }, [importing, project.id, refreshFiles])
 
   /** 编译论文：等待完成后展示日志 */
-  const handleCompile = useCallback(async () => {
-    if (compiling) return
-    setCompiling(true)
-    toast.info('正在编译论文（xelatex）…首次编译可能较慢')
-    try {
-      const res = await window.app?.project?.compileLatex?.(project.id)
-      if (res) {
-        setLatexResult(res)
-        await refreshFiles()
+  const handleCompile = useCallback(
+    async (opts?: { openInPreview?: boolean; silent?: boolean }) => {
+      if (compiling) return
+      setCompiling(true)
+      if (!opts?.silent) toast.info('正在编译论文（xelatex）…首次编译可能较慢')
+      try {
+        const res = await window.app?.project?.compileLatex?.(project.id)
+        if (res) {
+          setLatexResult(res)
+          await refreshFiles()
+          if (res.success && res.pdfGenerated && opts?.openInPreview) {
+            // 编译成功 → 自动在预览面板打开 paper/main.pdf
+            setPreviewPath('paper/main.pdf')
+            setPreviewLoading(true)
+            try {
+              const pv = await window.app?.project?.readPreview?.(project.id, 'paper/main.pdf')
+              setPreview(pv ?? null)
+            } finally {
+              setPreviewLoading(false)
+            }
+          }
+        }
+      } finally {
+        setCompiling(false)
       }
-    } finally {
-      setCompiling(false)
-    }
-  }, [compiling, project.id, refreshFiles])
+    },
+    [compiling, project.id, refreshFiles]
+  )
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -317,7 +313,7 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
           variant="outline"
           size="sm"
           className="shrink-0"
-          onClick={() => void handleCompile()}
+          onClick={() => void handleCompile({ openInPreview: true })}
           disabled={compiling}
           title="用 xelatex 编译 paper/main.tex"
         >
@@ -353,11 +349,23 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
         </Button>
       </div>
 
-      {/* 三栏（左右可收起 + 可拖拽调整宽度） */}
-      <div ref={containerRef} className="flex-1 flex min-h-0 min-w-0">
-        {/* 左：项目文件 */}
+      {/* 三栏（左右可收起 + re-resizable 拖拽调宽；三栏容器 relative，供右栏 absolute 右钉） */}
+      <div className="flex-1 flex min-h-0 min-w-0 relative">
+        {/* 左：项目文件（re-resizable：指针捕获 + 边界钳制，鼠标出窗/最大化均正常） */}
         {leftOpen && (
-          <aside style={{ width: leftWidth }} className="shrink-0 flex flex-col min-h-0 border-r overflow-hidden">
+          <Resizable
+            size={{ width: leftWidth, height: '100%' }}
+            minWidth={160}
+            maxWidth={480}
+            enable={{ right: true }}
+            handleClasses={{ right: 'cursor-col-resize bg-transparent hover:bg-primary/30 transition-colors' }}
+            handleStyles={{ right: { width: 5, right: -3 } }}
+            onResizeStop={(_e, _dir, _ref, d) => {
+              setLeftWidth((w) => Math.min(480, Math.max(160, w + d.width)))
+            }}
+            className="shrink-0"
+          >
+            <aside className="w-full h-full flex flex-col min-h-0 border-r overflow-hidden">
             <div className="h-9 shrink-0 border-b flex items-center justify-between px-3">
               <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                 <FolderTree className="size-3.5" /> 项目文件
@@ -398,55 +406,80 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
               ))}
             </div>
           </aside>
-        )}
-
-        {/* 左侧拖拽分隔条 */}
-        {leftOpen && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-primary/30 active:bg-primary/50 transition-colors"
-            onMouseDown={startDrag('left')}
-            title="拖动调整左栏宽度"
-          />
+          </Resizable>
         )}
 
         {/* 中：Agent 对话 */}
         <AgentChatPanel projectId={project.id} onActivity={() => void refreshFiles()} />
 
-        {/* 右侧拖拽分隔条 */}
-        {rightOpen && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-primary/30 active:bg-primary/50 transition-colors"
-            onMouseDown={startDrag('right')}
-            title="拖动调整右栏宽度"
-          />
-        )}
+        {/* 右栏拖拽手柄：贴在预览面板左边缘（即预览的左边界），拖动只改预览宽度 */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="w-1.5 shrink-0 cursor-col-resize z-20 bg-transparent hover:bg-primary/30 transition-colors"
+          title="拖动调整预览面板宽度（向右拖变窄，向左拖变宽；拖到最右收起）"
+          onPointerDown={(e) => {
+            e.preventDefault()
+            ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+            setRightResizing(true)
+          }}
+          onPointerMove={(e) => {
+            if (!rightResizing) return
+            const container = e.currentTarget.parentElement
+            if (!container) return
+            const w = container.getBoundingClientRect().right - e.clientX
+            if (w <= 24) {
+              // 拖过阈值：收起面板
+              setRightOpen(false)
+              setRightResizing(false)
+            } else {
+              setRightOpen(true)
+              setRightWidth(Math.min(1200, Math.max(200, w)))
+            }
+          }}
+          onPointerUp={() => setRightResizing(false)}
+        />
 
-        {/* 右：预览面板（图片/PDF/Markdown/文本） */}
+        {/* 右：预览面板（普通 flex 成员：右缘天然钉住右边框，收起即完全消失） */}
         {rightOpen && (
-          <aside className="flex flex-col min-h-0 border-l overflow-hidden">
+          <aside
+            style={{ width: rightWidth }}
+            className="shrink-0 flex flex-col min-h-0 border-l ml-2 overflow-hidden"
+          >
             <div className="h-9 shrink-0 border-b flex items-center justify-between px-3 gap-2">
               <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 min-w-0">
                 <FileText className="size-3.5 shrink-0" />
                 <span className="truncate">{previewPath ? previewPath : '预览面板'}</span>
               </span>
               {previewPath && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 shrink-0"
-                  onClick={() => void handleCopyPath(previewPath)}
-                  aria-label="复制路径"
-                  title="复制路径"
-                >
-                  <Copy className="size-3" />
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {previewPath === 'paper/main.pdf' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      onClick={() => void handleCompile({ openInPreview: true, silent: true })}
+                      disabled={compiling}
+                      aria-label="重新编译论文"
+                      title="重新编译论文并刷新预览"
+                    >
+                      <RefreshCw className={cn('size-3', compiling && 'animate-spin')} />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    onClick={() => void handleCopyPath(previewPath)}
+                    aria-label="复制路径"
+                    title="复制路径"
+                  >
+                    <Copy className="size-3" />
+                  </Button>
+                </div>
               )}
             </div>
-            <div className="flex-1 overflow-auto p-3 min-h-0">
+            <div className="flex-1 overflow-auto p-3 min-h-0 flex flex-col [&>*]:w-full">
               {previewLoading && <p className="text-xs text-muted-foreground text-center mt-8">加载中…</p>}
               {!previewLoading && !preview && !previewPath && (
                 <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground p-4 text-center">
@@ -458,16 +491,18 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
                 </div>
               )}
               {!previewLoading && preview?.kind === 'image' && preview.dataUrl && (
-                <img src={preview.dataUrl} alt={preview.name} className="max-w-full rounded border" />
+                <img src={preview.dataUrl} alt={preview.name} className="w-full h-auto object-contain rounded border" />
               )}
               {!previewLoading && preview?.kind === 'pdf' && preview.dataUrl && (
-                <iframe src={preview.dataUrl} title={preview.name} className="w-full h-full min-h-[400px] rounded border" />
+                <iframe src={preview.dataUrl} title={preview.name} className="w-full flex-1 min-h-[400px] rounded border" />
               )}
               {!previewLoading && preview?.kind === 'md' && preview.text !== undefined && (
-                <Markdown content={preview.text} />
+                <div className="w-full">
+                  <Markdown content={preview.text} />
+                </div>
               )}
               {!previewLoading && preview?.kind === 'text' && preview.text !== undefined && (
-                <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-5">{preview.text}</pre>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-5 w-full">{preview.text}</pre>
               )}
               {!previewLoading && preview && (preview.kind === 'unsupported' || preview.message) && (
                 <div className="h-full flex flex-col items-center justify-center gap-3 text-center p-4">
@@ -481,9 +516,66 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
                 </div>
               )}
             </div>
+            {/* 全屏预览入口 */}
+            {preview && !previewLoading && (
+              <div className="shrink-0 border-t p-2">
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setFullscreen(true)}>
+                  全屏预览
+                </Button>
+              </div>
+            )}
           </aside>
         )}
       </div>
+
+      {/* 全屏预览覆盖层 */}
+      {fullscreen && preview && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          <div className="h-12 shrink-0 border-b flex items-center gap-3 px-4">
+            <span className="text-sm font-medium truncate flex-1">{previewPath}</span>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {preview.size ? `${(preview.size / 1024).toFixed(1)} KB` : ''}
+            </span>
+            {preview.kind === 'image' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const img = document.querySelector<HTMLImageElement>('#fullscreen-preview img')
+                  if (img) {
+                    img.style.maxWidth = img.style.maxWidth === 'none' ? '100%' : 'none'
+                    img.style.width = img.style.width === '100%' ? 'auto' : '100%'
+                  }
+                }}
+              >
+                100% / 适应
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setFullscreen(false)}>
+              退出全屏
+            </Button>
+          </div>
+          <div id="fullscreen-preview" className="flex-1 overflow-auto p-4 flex flex-col [&>*]:w-full">
+            {preview.kind === 'image' && preview.dataUrl && (
+              <img src={preview.dataUrl} alt={preview.name} className="w-full h-auto object-contain" />
+            )}
+            {preview.kind === 'pdf' && preview.dataUrl && (
+              <iframe src={preview.dataUrl} title={preview.name} className="w-full flex-1 rounded border" />
+            )}
+            {preview.kind === 'md' && preview.text !== undefined && (
+              <div className="w-full max-w-4xl mx-auto">
+                <Markdown content={preview.text} />
+              </div>
+            )}
+            {preview.kind === 'text' && preview.text !== undefined && (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-5 w-full">{preview.text}</pre>
+            )}
+            {preview.kind === 'unsupported' && (
+              <p className="text-sm text-muted-foreground m-auto">{preview.message ?? '暂不支持预览'}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 项目备份对话框 */}
       <ProjectBackupDialog open={backupOpen} onOpenChange={setBackupOpen} project={project} />
@@ -538,12 +630,41 @@ export function WorkspacePage({ project, onBack }: WorkspacePageProps) {
           )}
           <DialogFooter>
             {latexResult?.pdfGenerated && (
-              <Button
-                variant="outline"
-                onClick={() => void window.app?.project?.copyPath?.(project.id, 'paper/main.pdf')}
-              >
-                <Copy className="size-4" /> 复制 PDF 路径
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    const res = await window.app?.project?.openFile?.(project.id, 'paper/main.pdf')
+                    if (res && !res.success) toast.error('打开失败', { description: res.message })
+                  }}
+                >
+                  <FileText className="size-4" /> 打开 PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setLatexResult(null)
+                    setPreviewPath('paper/main.pdf')
+                    void (async () => {
+                      setPreviewLoading(true)
+                      try {
+                        const pv = await window.app?.project?.readPreview?.(project.id, 'paper/main.pdf')
+                        setPreview(pv ?? null)
+                      } finally {
+                        setPreviewLoading(false)
+                      }
+                    })()
+                  }}
+                >
+                  在预览中查看
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void window.app?.project?.copyPath?.(project.id, 'paper/main.pdf')}
+                >
+                  <Copy className="size-4" /> 复制路径
+                </Button>
+              </>
             )}
             <Button onClick={() => setLatexResult(null)}>关闭</Button>
           </DialogFooter>

@@ -128,6 +128,19 @@ export function ProjectListPage({
     refreshStatus()
   }, [refresh, refreshStatus])
 
+  /** 上传题目建项：一步到位 */
+  const handleCreateFromFile = useCallback(async () => {
+    const res = await window.app?.project?.createFromFile?.()
+    if (res?.success && res.project) {
+      toast.success(`项目「${res.project.name}」已创建`, {
+        description: res.statementUpdated ? '题目原文已导入，可直接开始对话' : '附件已导入'
+      })
+      onOpenProject(res.project)
+    } else if (res?.message) {
+      toast.error('创建失败', { description: res.message })
+    }
+  }, [onOpenProject])
+
   const handleDelete = async (project: ProjectMeta) => {
     // 二次确认，防误删整个项目目录
     if (!window.confirm(`确定删除项目「${project.name}」吗？\n该操作会删除项目的全部题目、代码与论文文件，不可恢复。`)) {
@@ -182,7 +195,7 @@ export function ProjectListPage({
       <div className="flex items-center justify-between gap-4 mb-3">
         <h2 className="text-sm font-semibold text-muted-foreground">最近项目</h2>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled title="即将上线：上传题目 PDF 自动创建项目">
+          <Button variant="outline" size="sm" onClick={() => void handleCreateFromFile()}>
             <FileUp className="size-4" /> 上传题目建项
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)}>

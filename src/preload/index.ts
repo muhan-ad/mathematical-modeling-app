@@ -65,6 +65,24 @@ const api = {
     /** 在资源管理器中显示文件 */
     reveal: (id: string, relPath: string) =>
       ipcRenderer.invoke('project:reveal', id, relPath) as Promise<{ success: boolean; message: string }>,
+    /** 用系统默认程序打开文件 */
+    openFile: (id: string, relPath: string) =>
+      ipcRenderer.invoke('project:openFile', id, relPath) as Promise<{ success: boolean; message: string }>,
+    /** 上传题目建项：一步到位（选文件 → 建项目 → 导入题目 → 返回新项目） */
+    createFromFile: () =>
+      ipcRenderer.invoke('project:createFromFile') as Promise<{
+        success: boolean
+        message: string
+        project: {
+          id: string
+          name: string
+          competition: 'cumcm' | 'mcm' | 'huashu' | 'other'
+          createdAt: string
+          updatedAt: string
+          stage: string
+        } | null
+        statementUpdated: boolean
+      }>,
     /** 上传题目：弹多选文件框，复制到 problem/attachments/（md/txt 同步 statement.md） */
     importProblem: (id: string) =>
       ipcRenderer.invoke('project:importProblem', id) as Promise<{
@@ -140,6 +158,15 @@ const api = {
         text?: string
         message: string
       }>
+  },
+  // 提示词优化 AI 的专属技能（独立于主技能库）
+  optskill: {
+    list: () => ipcRenderer.invoke('optskill:list'),
+    get: (id: string) => ipcRenderer.invoke('optskill:get', id),
+    save: (input: { id?: string; name: string; description: string; content: string }) =>
+      ipcRenderer.invoke('optskill:save', input),
+    remove: (id: string) => ipcRenderer.invoke('optskill:delete', id),
+    setEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('optskill:setEnabled', id, enabled)
   },
   // 插件管理 IPC（导入/列表/卸载；插件技能自动并入技能库）
   plugin: {

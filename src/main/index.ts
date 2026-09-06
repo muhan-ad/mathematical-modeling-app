@@ -1,5 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import {
@@ -46,6 +46,15 @@ import {
 } from './services/storage-service'
 import { optimizePrompt } from './services/prompt-optimizer'
 import {
+  deleteOptimizerSkill,
+  getOptimizerSkill,
+  listOptimizerSkills,
+  saveOptimizerSkill,
+  setOptimizerSkillEnabled,
+  type OptimizerSkillDetail,
+  type OptimizerSkillMeta
+} from './services/optimizer-skill-service'
+import {
   resolveAgentApproval,
   sendAgentMessage,
   setAgentPermission,
@@ -82,6 +91,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: 'Windows App Maker',
+    icon: join(__dirname, '../../build/icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -292,6 +302,53 @@ ipcMain.handle(
   }
 )
 
+// 用系统默认程序打开项目内文件（如 PDF 阅读器打开 paper/main.pdf）
+ipcMain.handle(
+  'project:openFile',
+  async (_evt, id: string, relPath: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const abs = getProjectFileAbsPath(id, relPath)
+      if (!abs.success || !abs.path) return { success: false, message: abs.message }
+      const errMessage = await shell.openPath(abs.path)
+      return errMessage ? { success: false, message: errMessage } : { success: true, message: '' }
+    } catch (err) {
+      return { success: false, message: err instanceof Error ? err.message : String(err) }
+    }
+  }
+)
+
+// 上传题目建项：一步到位（选文件 → 以文件名建项目 → 导入题目 → 返回新项目）
+ipcMain.handle(
+  'project:createFromFile',
+  async (
+    _evt
+  ): Promise<{ success: boolean; message: string; project: ProjectMeta | null; statementUpdated: boolean }> => {
+    const result = await dialog.showOpenDialog({
+      title: '选择题目文件（将自动创建项目并导入）',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        {
+          name: '题目与附件',
+          extensions: ['md', 'txt', 'markdown', 'pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'zip', 'xlsx', 'xls', 'csv']
+        }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, message: '', project: null, statementUpdated: false }
+    }
+    const first = basename(result.filePaths[0])
+    const name = first.replace(/\.[^.]+$/, '').trim().slice(0, 80) || '新建项目'
+    const project = createProject({ name, competition: 'other' })
+    const imp = importProblemFiles(project.id, result.filePaths)
+    if (!imp.success) {
+      // 导入失败时回滚刚创建的空项目，避免留下垃圾
+      deleteProject(project.id)
+      return { success: false, message: imp.message, project: null, statementUpdated: false }
+    }
+    return { success: true, message: imp.message, project, statementUpdated: imp.statementUpdated }
+  }
+)
+
 // 题目上传：弹多选文件框 → 复制到 problem/attachments/（md/txt 同步 statement.md）
 ipcMain.handle(
   'project:importProblem',
@@ -412,6 +469,33 @@ ipcMain.handle(
     context?: { providerId?: string; stage?: Stage }
   ): Promise<{ success: boolean; text?: string; message: string }> => {
     return optimizePrompt(text, context ?? {})
+  }
+)
+
+// 提示词优化 AI 的专属技能（独立于主技能库；管理入口在设置页）
+ipcMain.handle('optskill:list', (): OptimizerSkillMeta[] => {
+  return listOptimizerSkills()
+})
+
+ipcMain.handle('optskill:get', (_evt, id: string): OptimizerSkillDetail | null => {
+  return getOptimizerSkill(id)
+})
+
+ipcMain.handle(
+  'optskill:save',
+  (_evt, input: { id?: string; name: string; description: string; content: string }) => {
+    return saveOptimizerSkill(input)
+  }
+)
+
+ipcMain.handle('optskill:delete', (_evt, id: string): { success: boolean; message: string } => {
+  return deleteOptimizerSkill(id)
+})
+
+ipcMain.handle(
+  'optskill:setEnabled',
+  (_evt, id: string, enabled: boolean): { success: boolean; message: string } => {
+    return setOptimizerSkillEnabled(id, enabled)
   }
 )
 

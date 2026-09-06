@@ -9,6 +9,13 @@ export type ProjectMeta = {
   stage: string
 }
 
+export type CreateFromFileResult = {
+  success: boolean
+  message: string
+  project: ProjectMeta | null
+  statementUpdated: boolean
+}
+
 export type AppApi = {
   platform: string
   versions: {
@@ -52,6 +59,13 @@ export type AppApi = {
       patch: { name?: string; competition?: string; stage?: string }
     ) => Promise<ProjectMeta>
     delete: (id: string) => Promise<{ success: boolean; message: string }>
+    /** 上传题目建项：一步到位（选文件 → 建项目 → 导入题目 → 返回新项目） */
+    createFromFile: () => Promise<{
+      success: boolean
+      message: string
+      project: ProjectMeta | null
+      statementUpdated: boolean
+    }>
     files: (id: string) => Promise<{ path: string; type: 'file' | 'dir'; size: number }[]>
     renameFile: (
       id: string,
@@ -70,6 +84,7 @@ export type AppApi = {
       message?: string
     }>
     reveal: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
+    openFile: (id: string, relPath: string) => Promise<{ success: boolean; message: string }>
     importProblem: (id: string) => Promise<{
       success: boolean
       message: string
@@ -144,6 +159,31 @@ export type AppApi = {
     import: () => Promise<{ success: boolean; message: string }>
     uninstall: (id: string) => Promise<{ success: boolean; message: string }>
     openDir: () => Promise<{ success: boolean; message: string }>
+  }
+  optskill: {
+    list: () => Promise<{
+      id: string
+      name: string
+      description: string
+      enabled: boolean
+      updatedAt: string
+    }[]>
+    get: (id: string) => Promise<{
+      id: string
+      name: string
+      description: string
+      enabled: boolean
+      updatedAt: string
+      content: string
+    } | null>
+    save: (input: {
+      id?: string
+      name: string
+      description: string
+      content: string
+    }) => Promise<{ success: boolean; id?: string; message: string }>
+    remove: (id: string) => Promise<{ success: boolean; message: string }>
+    setEnabled: (id: string, enabled: boolean) => Promise<{ success: boolean; message: string }>
   }
   settings: {
     get: () => Promise<{

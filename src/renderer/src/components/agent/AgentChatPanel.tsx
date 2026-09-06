@@ -51,13 +51,26 @@ function DropdownSelect({
   onChange: (value: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  /** 菜单 fixed 定位坐标（基于按钮位置计算，不受任何 overflow 裁剪） */
+  const [menuPos, setMenuPos] = useState<{ left: number; bottom: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const currentLabel = options.find((o) => o.value === current)?.label ?? current
+
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 6 })
+    }
+    setOpen((v) => !v)
+  }
+
   return (
     <div className="relative min-w-0">
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={btnRef}
+        onClick={toggle}
         className={cn(
-          'flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-xs transition-colors min-w-0 w-full',
+          'flex items-center gap-1 h-8 rounded-md border px-2 text-xs transition-colors min-w-0 w-full',
           open ? 'border-primary/50 bg-muted/60' : 'bg-background hover:bg-muted/50'
         )}
       >
@@ -65,10 +78,13 @@ function DropdownSelect({
         <span className="font-medium truncate min-w-0 flex-1 text-left">{currentLabel}</span>
         <ChevronDown className={cn('size-3.5 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
-      {open && (
+      {open && menuPos && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full mb-1.5 left-0 z-50 min-w-[220px] rounded-md border bg-popover py-1 shadow-lg">
+          <div
+            className="fixed z-50 min-w-[220px] rounded-md border bg-popover py-1 shadow-lg"
+            style={{ left: menuPos.left, bottom: menuPos.bottom }}
+          >
             {options.map((o) => (
               <button
                 key={o.value}
@@ -564,7 +580,7 @@ export function AgentChatPanel({ projectId, onActivity }: AgentChatPanelProps) {
   const busy = status.state !== 'idle'
 
   return (
-    <section className="flex flex-col min-h-0 min-w-0 border-x">
+    <section className="flex-1 flex flex-col min-h-0 min-w-0 border-x">
       {/* 消息流（独立滚动区） */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && (
@@ -643,10 +659,10 @@ export function AgentChatPanel({ projectId, onActivity }: AgentChatPanelProps) {
           )}
         />
 
-        {/* 控制行：模型 / 权限 / 推理深度（下拉菜单，按容器宽度等比伸缩）+ 优化/发送（成组靠右）
-            三个下拉各占 20% 宽（最小 80px），窗口变窄时同步收缩不越界 */}
-        <div className="flex items-center gap-2 text-xs flex-nowrap min-w-0">
-          <div className="min-w-[80px] max-w-[180px]" style={{ width: '20%' }}>
+        {/* 控制行：模型 / 权限 / 推理深度（下拉菜单）+ 优化/发送（成组靠右）
+            窄面板时下拉按比例收缩，按钮组不越界 */}
+        <div className="flex items-center gap-1.5 text-xs flex-nowrap min-w-0 overflow-hidden">
+          <div className="min-w-0 max-w-[180px] flex-[2_1_80px] overflow-hidden">
             <DropdownSelect
               label="模型"
               current={providerId}
@@ -658,7 +674,7 @@ export function AgentChatPanel({ projectId, onActivity }: AgentChatPanelProps) {
             />
           </div>
 
-          <div className="min-w-[80px] max-w-[180px]" style={{ width: '20%' }}>
+          <div className="min-w-0 max-w-[150px] flex-[1_1_70px] overflow-hidden">
             <DropdownSelect
               label="权限"
               current={permission}
@@ -667,7 +683,7 @@ export function AgentChatPanel({ projectId, onActivity }: AgentChatPanelProps) {
             />
           </div>
 
-          <div className="min-w-[80px] max-w-[180px]" style={{ width: '20%' }}>
+          <div className="min-w-0 max-w-[150px] flex-[1_1_70px] overflow-hidden">
             <DropdownSelect
               label="深度"
               current={effort}

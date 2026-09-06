@@ -11,6 +11,7 @@ import {
   resolvePromptOptimizer,
   type Stage
 } from './storage-service'
+import { resolveEnabledOptimizerSkillText } from './optimizer-skill-service'
 
 const OPTIMIZER_SYSTEM = `你是提示词优化专家，专门为数学建模竞赛辅助 Agent 优化用户指令。
 
@@ -21,6 +22,17 @@ const OPTIMIZER_SYSTEM = `你是提示词优化专家，专门为数学建模竞
 4. 语言简练、指令清晰、用简体中文。
 
 只输出改写后的提示词正文，不要任何解释、前言或代码块包裹。`
+
+/** 主力 Agent 的固定事实：写入优化系统提示词，让产出的指令天然贴合应用规范 */
+const AGENT_FACTS = `以下是执行该提示词的 Agent 的固定背景（优化时必须符合这些规范）：
+- 项目目录结构（英文命名）：problem/（题目 statement.md 与 attachments/ 附件）、
+  workspace/（code 求解代码、data 数据结果、outputs 运行输出、figures 生成图表、notes 过程笔记）、
+  paper/（main.tex、sections/ 章节、figures/ 论文图片）
+- 可用工具：file_read（支持 PDF 文本抽取）、file_create/file_write/file_delete/file_list、
+  python_exec（环境已装 numpy/scipy/pandas/matplotlib/sympy/networkx/SciencePlots）、
+  latex_compile（xelatex 编译 paper/main.tex）、skill_load（按需加载技能）
+- 硬性规则：新建文件一律英文命名；数值结论必须来自真实代码执行；图片先存 workspace/figures/ 再复制到 paper/figures/
+- Agent 带有可加载的技能库（读题拆解、获奖级做题流程、图表选型等），提示词可在合适环节要求 Agent 加载对应技能`
 
 export interface PromptOptimizeContext {
   /** 对话当前手动选择的 provider id（「跟随设置」时为空） */
@@ -49,7 +61,10 @@ export async function optimizePrompt(
     return { success: false, message: '尚未配置模型服务商，请先到「设置」里添加' }
   }
   try {
-    const optimized = await completeOnce(provider, OPTIMIZER_SYSTEM, trimmed)
+    // 启用的专属技能（设置页管理）注入优化提示词，让产出贴合用户自己的工作流
+    const skillText = resolveEnabledOptimizerSkillText()
+    const system = skillText ? `${OPTIMIZER_SYSTEM}\n\n${AGENT_FACTS}\n\n${skillText}` : `${OPTIMIZER_SYSTEM}\n\n${AGENT_FACTS}`
+    const optimized = await completeOnce(provider, system, trimmed)
     return { success: true, text: optimized, message: '' }
   } catch (err) {
     return {
