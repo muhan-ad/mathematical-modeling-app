@@ -4,3 +4,7 @@ allowBuilds:
 onlyBuiltDependencies:
   - electron
   - esbuild
+# electron-builder 按 npm/yarn 扁平结构扫描依赖；pnpm 默认隔离布局(linker=isolated)会把
+# 间接依赖留在 .pnpm 虚拟存储、顶层不放入口，导致打包后运行时缺依赖（如 archiver 的 is-stream）。
+# nodeLinker: hoisted 让 pnpm 产出扁平 node_modules，electron-builder 才能把全部生产依赖完整打进 app.asar。
+nodeLinker: hoisted

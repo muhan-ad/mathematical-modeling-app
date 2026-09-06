@@ -91,6 +91,8 @@ pnpm run dev
 | `pnpm run typecheck` | TypeScript 类型检查 |
 | `pnpm run build:win` | 打包 Windows 安装包（产物在 `release/`） |
 
+> **打包须知**：electron-builder 按扁平 `node_modules` 结构扫描生产依赖。本项目已在 `pnpm-workspace.yaml` 配置 `nodeLinker: hoisted`,让 pnpm 产出扁平布局,确保 `archiver` 等库的**间接依赖**(如 `is-stream`)能完整打进安装包。若你**曾以旧版隔离布局装过依赖**,请先删除 `node_modules` 再 `pnpm install` 后重新打包,否则安装包会缺运行时依赖、启动报 `ERR_MODULE_NOT_FOUND: Cannot find package 'is-stream'`。
+
 ### 论文编译环境（LaTeX，可选但推荐）
 
 > **声明**：为控制安装包体积，本应用**不内置 TeX 发行版**。「写论文 → 编译 PDF」依赖你本机安装的 TeX（应用通过系统 `PATH` 查找 `xelatex`）。
