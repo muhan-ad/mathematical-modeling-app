@@ -17,6 +17,9 @@ extraResources:
   # 随包内置技能（首次运行由 skill-service 播种到用户技能库）
   - from: resources/skills
     to: skills
+  # 论文模板 class（cumcmthesis.cls），新建项目时复制到 paper/ 供 xelatex 编译
+  - from: resources/paper-templates
+    to: paper-templates
 win:
   target:
     - nsis

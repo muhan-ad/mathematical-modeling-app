@@ -96,27 +96,41 @@ function validateCompetition(c: unknown): CompetitionType {
 }
 
 /**
- * 通用 LaTeX 论文骨架（ctex + xelatex，design.md §9）
- * Phase 1 使用通用模板；国赛/美赛官方模板在 Phase 4 接入
+ * 随包分发的论文模板目录：开发态 <repo>/resources/paper-templates，
+ * 打包后 <resources>/paper-templates（见 electron-builder extraResources）。
+ * 内含 cumcmthesis.cls，供每个项目复制到 paper/ 后由 xelatex 加载。
+ */
+function getBundledPaperTemplateDir(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath ?? '', 'paper-templates')
+    : join(app.getAppPath(), 'resources', 'paper-templates')
+}
+
+/**
+ * CUMCM 国赛论文主文件骨架（\documentclass{cumcmthesis}）。
+ * 封面信息宏留空由选手/模型填写；正文仍按五章节 \input 章节文件。
  */
 function paperMainTex(projectName: string): string {
-  return `% ${projectName} — 主文件（xelatex 编译）
-\\documentclass[UTF8]{ctexart}
-\\usepackage{amsmath,amssymb,amsfonts}
-\\usepackage{graphicx}
-\\usepackage{booktabs}
-\\usepackage{geometry}
-\\usepackage{hyperref}
-\\geometry{a4paper,margin=2.5cm}
-
+  return `\\documentclass{cumcmthesis}
 \\title{${escapeLatex(projectName)}}
-\\author{}
-\\date{}
+\\tihao{ }
+\\baominghao{ }
+\\schoolname{ }
+\\membera{ }
+\\memberb{ }
+\\memberc{ }
+\\supervisor{ }
+\\yearinput{ }
+\\monthinput{ }
+\\dayinput{ }
 
 \\begin{document}
 \\maketitle
 
 \\begin{abstract}
+请在此填写摘要：简要说明问题背景、所建模型、求解方法与主要结论。
+
+\\keywords{关键词一；关键词二}
 \\end{abstract}
 
 \\input{sections/analysis}
@@ -178,12 +192,22 @@ function initProjectStructure(id: string, name: string, competition: Competition
     'utf-8'
   )
 
-  // paper：主文件 + 章节骨架
-  writeFileSync(join(root, 'paper', 'main.tex'), paperMainTex(name), 'utf-8')
-  for (const [file, content] of Object.entries(SECTION_STUBS)) {
-    writeFileSync(join(root, 'paper', 'sections', file), content, 'utf-8')
+  // paper：复制 CUMCM 模板 class + 主文件 + 章节骨架
+  const paperRoot = join(root, 'paper')
+  const bundledCls = join(getBundledPaperTemplateDir(), 'cumcmthesis.cls')
+  if (existsSync(bundledCls)) {
+    // 用 cpSync 复制（bin 安全），模板缺失时退回原自包含模板由编译给出明确报错
+    try {
+      cpSync(bundledCls, join(paperRoot, 'cumcmthesis.cls'))
+    } catch {
+      /* 忽略：编译期会提示缺 class */
+    }
   }
-  writeFileSync(join(root, 'paper', 'references.bib'), '', 'utf-8')
+  writeFileSync(join(paperRoot, 'main.tex'), paperMainTex(name), 'utf-8')
+  for (const [file, content] of Object.entries(SECTION_STUBS)) {
+    writeFileSync(join(paperRoot, 'sections', file), content, 'utf-8')
+  }
+  writeFileSync(join(paperRoot, 'references.bib'), '', 'utf-8')
 
   // state.json / conversation.jsonl（空初始状态）
   writeFileSync(join(root, 'state.json'), JSON.stringify({ stage: 'understanding' }, null, 2), 'utf-8')
